@@ -16,6 +16,7 @@ pub enum BlockTextures {
         texture: Handle<Image>,
         atlas: TextureAtlasLayout,
         blocks: HashMap<Block, usize>,
+        individual_textures: HashMap<Block, Handle<Image>>,
     },
 }
 
@@ -86,23 +87,25 @@ impl BlockTextures {
 
         let mut builder = TextureAtlasBuilder::default();
         let mut blocks = HashMap::new();
+        let mut individual_textures = HashMap::new();
+
         for (i, (block, handle)) in handles.iter().enumerate() {
             let texture = images.get(handle.id()).unwrap();
             builder.add_texture(Some(handle.id()), texture);
             blocks.insert(*block, i);
+            individual_textures.insert(*block, handle.clone());
         }
 
         let (atlas, _sources, texture) = builder.build().unwrap();
 
-        for (_, handle) in handles {
-            images.remove(handle.id());
-        }
+        // Don't remove individual textures, we need them for the hotbar
         let texture = images.add(texture);
 
         *self = BlockTextures::Loaded {
             atlas,
             blocks,
             texture,
+            individual_textures,
         };
         true
     }
@@ -138,6 +141,16 @@ impl BlockTextures {
                     ),
                 })
             }
+        }
+    }
+
+    pub fn get_block_texture(&self, block: Block) -> Option<Handle<Image>> {
+        match self {
+            BlockTextures::Loading { .. } => None,
+            BlockTextures::Loaded {
+                individual_textures,
+                ..
+            } => individual_textures.get(&block).cloned(),
         }
     }
 

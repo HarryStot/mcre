@@ -2,6 +2,7 @@ use crate::chunk::{Chunk, world_pos_to_chunk_pos};
 use crate::chunk_map::ChunkMap;
 use crate::interaction::raycasting::{BlockRaycastHit, raycast_block_data};
 use crate::textures::BlockTextures;
+use crate::ui::hotbar::Hotbar;
 use bevy::prelude::*;
 use mcre_core::{Block, Direction};
 
@@ -37,6 +38,7 @@ pub fn apply_block_placing(
     mut chunks_query: Query<(&mut Chunk, &mut Mesh3d)>,
     textures: Res<BlockTextures>,
     mut meshes: ResMut<Assets<Mesh>>,
+    hotbar: Res<Hotbar>,
 ) {
     for event in events.read() {
         let hit: &BlockRaycastHit = &event.0;
@@ -59,12 +61,10 @@ pub fn apply_block_placing(
         if let Ok((mut chunk, mut mesh_handle)) = chunks_query.get_mut(chunk_entity) {
             if let Some(block_state) = chunk.get(local_pos) {
                 if block_state.block() == Block::AIR {
-                    chunk.set_block(local_pos, Block::DIRT);
+                    let block_to_place = hotbar.get_selected_block();
+
+                    chunk.set_block(local_pos, block_to_place);
                     mesh_handle.0 = chunk.regenerate_mesh(&textures, &mut meshes);
-                    // info!(
-                    //     "Placed block at world {:?} (chunk {:?}, local {:?})",
-                    //     place_world_pos, chunk_world_pos, local_pos
-                    // );
                 }
             }
         }

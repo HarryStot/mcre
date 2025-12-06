@@ -18,7 +18,9 @@ use crate::{
     chunk::{CHUNK_SIZE, Chunk},
     interaction::BlockInteractionPlugin,
     textures::BlockTextures,
-    ui::{crosshair::CrosshairPlugin, debug::DebugMenuPlugin, load::LoadingUi},
+    ui::{
+        crosshair::CrosshairPlugin, debug::DebugMenuPlugin, hotbar::HotbarPlugin, load::LoadingUi,
+    },
 };
 
 fn main() {
@@ -48,6 +50,7 @@ fn main() {
             DebugMenuPlugin,
             CrosshairPlugin,
             BlockInteractionPlugin,
+            HotbarPlugin,
         ))
         .init_state::<AppState>()
         .init_resource::<ChunkMap>()

@@ -1,3 +1,4 @@
-pub mod debug;
-pub mod load;
 pub mod crosshair;
+pub mod debug;
+pub mod hotbar;
+pub mod load;
