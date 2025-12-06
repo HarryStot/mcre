@@ -1,4 +1,4 @@
-use crate::chunk::{Chunk, world_pos_to_chunk_pos};
+use crate::chunk::{Chunk, ChunkComponent, world_pos_to_chunk_pos, math::pos::ChunkPosition};
 use crate::chunk_map::ChunkMap;
 use bevy::prelude::*;
 use mcre_core::{Block, BlockState, Direction};
@@ -10,7 +10,7 @@ pub struct BlockRaycastHit {
     pub block_pos: IVec3,
     pub chunk_local_pos: UVec3,
     #[allow(unused)] // todo maybe remvoe later if not needed
-    pub chunk_world_pos: IVec3,
+    pub chunk_world_pos: ChunkPosition,
     pub chunk_entity: Entity,
     pub distance: f32,
     pub face: Direction,
@@ -23,7 +23,8 @@ pub fn raycast_block_data(
     origin: Vec3,
     direction: Vec3,
     chunk_map: &ChunkMap,
-    chunk_query: &Query<&Chunk>,
+    chunk_query: &Query<&ChunkComponent>,
+    chunks: &Res<Assets<Chunk>>,
 ) -> Option<BlockRaycastHit> {
     let direction = direction.normalize();
 
@@ -64,7 +65,7 @@ pub fn raycast_block_data(
 
     while distance < MAX_REACH_DISTANCE {
         if let Some((chunk_local_pos, chunk_world_pos, chunk_entity, block_state)) =
-            check_block_at_position_data(block_pos, chunk_map, chunk_query)
+            check_block_at_position_data(block_pos, chunk_map, chunk_query, chunks)
         {
             return Some(BlockRaycastHit {
                 block_pos,
@@ -114,15 +115,21 @@ pub fn raycast_block_data(
 fn check_block_at_position_data(
     world_pos: IVec3,
     chunk_map: &ChunkMap,
-    chunk_query: &Query<&Chunk>,
-) -> Option<(UVec3, IVec3, Entity, BlockState)> {
-    let (chunk_world_pos, chunk_local_pos) = world_pos_to_chunk_pos(world_pos);
+    chunk_query: &Query<&ChunkComponent>,
+    chunks: &Res<Assets<Chunk>>,
+) -> Option<(UVec3, ChunkPosition, Entity, BlockState)> {
+    // We need to get chunk_size from somewhere - for now use a hardcoded default
+    // This should ideally be passed as a parameter
+    let chunk_size = crate::chunk::math::size::ChunkSize::new(16);
+    let (chunk_world_pos, chunk_local_pos) = world_pos_to_chunk_pos(world_pos, &chunk_size);
 
     if let Some(&entity) = chunk_map.0.get(&chunk_world_pos) {
-        if let Ok(chunk) = chunk_query.get(entity) {
-            if let Some(block_state) = chunk.get(chunk_local_pos) {
-                if !block_state.is_air() {
-                    return Some((chunk_local_pos, chunk_world_pos, entity, *block_state));
+        if let Ok(chunk_component) = chunk_query.get(entity) {
+            if let Some(chunk) = chunks.get(&chunk_component.0) {
+                if let Some(block_state) = chunk.get(chunk_local_pos) {
+                    if !block_state.is_air() {
+                        return Some((chunk_local_pos, chunk_world_pos, entity, block_state));
+                    }
                 }
             }
         }
