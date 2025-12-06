@@ -1,4 +1,4 @@
-use crate::chunk::{Chunk, world_pos_to_chunk_pos};
+use crate::chunk::{Chunk, ChunkComponent, loader::ChunkLoaderConfig, world_pos_to_chunk_pos};
 use crate::chunk_map::ChunkMap;
 use crate::interaction::raycasting::{BlockRaycastHit, raycast_block_data};
 use crate::textures::BlockTextures;
@@ -13,7 +13,8 @@ pub fn handle_block_placing_input(
     mouse_input: Res<ButtonInput<MouseButton>>,
     camera_query: Query<&Transform, With<Camera>>,
     chunk_map: Res<ChunkMap>,
-    chunks_query: Query<&Chunk>,
+    chunks_query: Query<&ChunkComponent>,
+    chunks: Res<Assets<Chunk>>,
     mut place_event_writer: MessageWriter<BlockPlaceMessage>,
 ) {
     let Ok(camera_transform) = camera_query.single() else {
@@ -27,7 +28,13 @@ pub fn handle_block_placing_input(
     let ray_origin = camera_transform.translation;
     let ray_direction = camera_transform.forward();
 
-    if let Some(hit) = raycast_block_data(ray_origin, *ray_direction, &chunk_map, &chunks_query) {
+    if let Some(hit) = raycast_block_data(
+        ray_origin,
+        *ray_direction,
+        &chunk_map,
+        &chunks_query,
+        &chunks,
+    ) {
         place_event_writer.write(BlockPlaceMessage(hit));
     }
 }
@@ -35,7 +42,9 @@ pub fn handle_block_placing_input(
 pub fn apply_block_placing(
     mut events: MessageReader<BlockPlaceMessage>,
     chunk_map: Res<ChunkMap>,
-    mut chunks_query: Query<(&mut Chunk, &mut Mesh3d)>,
+    mut chunks_query: Query<(&ChunkComponent, &mut Mesh3d)>,
+    mut chunks: ResMut<Assets<Chunk>>,
+    config: Res<ChunkLoaderConfig>,
     textures: Res<BlockTextures>,
     mut meshes: ResMut<Assets<Mesh>>,
     hotbar: Res<Hotbar>,
@@ -52,19 +61,26 @@ pub fn apply_block_placing(
             Direction::Down => hit.block_pos + IVec3::new(0, -1, 0),
         };
 
-        let (chunk_world_pos, local_pos) = world_pos_to_chunk_pos(place_world_pos);
+        let (chunk_world_pos, local_pos) =
+            world_pos_to_chunk_pos(place_world_pos, &config.chunk_size);
 
         let Some(&chunk_entity) = chunk_map.0.get(&chunk_world_pos) else {
             continue;
         };
 
-        if let Ok((mut chunk, mut mesh_handle)) = chunks_query.get_mut(chunk_entity) {
-            if let Some(block_state) = chunk.get(local_pos) {
-                if block_state.block() == Block::AIR {
-                    let block_to_place = hotbar.get_selected_block();
+        if let Ok((chunk_component, mut mesh_handle)) = chunks_query.get_mut(chunk_entity) {
+            if let Some(chunk) = chunks.get_mut(&chunk_component.0) {
+                if let Some(block_state) = chunk.get(local_pos) {
+                    if block_state.block() == Block::AIR {
+                        let block_to_place = hotbar.get_selected_block();
 
-                    chunk.set_block(local_pos, block_to_place);
-                    mesh_handle.0 = chunk.regenerate_mesh(&textures, &mut meshes);
+                        chunk.set_block(local_pos, block_to_place);
+                        mesh_handle.0 = chunk.regenerate_mesh(&textures, &mut meshes);
+                        // info!(
+                        //     "Placed block at world {:?} (chunk {:?}, local {:?})",
+                        //     place_world_pos, chunk_world_pos, local_pos
+                        // );
+                    }
                 }
             }
         }

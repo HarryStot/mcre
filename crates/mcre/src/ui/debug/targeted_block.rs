@@ -1,5 +1,5 @@
 use crate::{
-    chunk::Chunk,
+    chunk::{Chunk, ChunkComponent},
     chunk_map::ChunkMap,
     interaction::raycasting::{BlockRaycastHit, raycast_block_data},
 };
@@ -41,7 +41,8 @@ impl TargetedBlockText {
         mut ui_query: Query<&mut Text, With<TargetedBlockText>>,
         camera_query: Query<&Transform, With<Camera>>,
         chunk_map: Res<ChunkMap>,
-        chunks_query: Query<&Chunk>,
+        chunks_query: Query<&ChunkComponent>,
+        chunks: Res<Assets<Chunk>>,
     ) {
         let Ok(mut ui) = ui_query.single_mut() else {
             return;
@@ -55,7 +56,7 @@ impl TargetedBlockText {
         let ray_origin = camera_transform.translation;
         let ray_direction = camera_transform.forward();
 
-        let hit = raycast_block_data(ray_origin, *ray_direction, &chunk_map, &chunks_query);
+        let hit = raycast_block_data(ray_origin, *ray_direction, &chunk_map, &chunks_query, &chunks);
         ui.0 = Self::format_text(hit);
     }
 }

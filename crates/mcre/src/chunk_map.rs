@@ -1,17 +1,21 @@
-use crate::chunk::Chunk;
+use crate::chunk::{Chunk, math::pos::ChunkPosition};
 use bevy::prelude::*;
 use std::collections::HashMap;
 
 #[derive(Resource, Default, Debug)]
-pub struct ChunkMap(pub HashMap<IVec3, Entity>);
+pub struct ChunkMap(pub HashMap<ChunkPosition, Entity>);
 
 pub fn update_chunk_map_system(
     mut chunk_map: ResMut<ChunkMap>,
-    query: Query<(Entity, &Transform), Added<Chunk>>,
+    query: Query<(Entity, &crate::chunk::ChunkComponent)>,
+    chunks: Res<Assets<Chunk>>,
 ) {
-    for (entity, transform) in query.iter() {
-        let chunk_pos = transform.translation.as_ivec3();
-        chunk_map.0.insert(chunk_pos, entity);
-        // info!("Added chunk at {} to ChunkMap", chunk_pos);
+    for (entity, chunk_component) in query.iter() {
+        if let Some(chunk) = chunks.get(&chunk_component.0) {
+            if !chunk_map.0.contains_key(&chunk.loc) {
+                chunk_map.0.insert(chunk.loc, entity);
+                // info!("Added chunk at {:?} to ChunkMap", chunk.loc);
+            }
+        }
     }
 }

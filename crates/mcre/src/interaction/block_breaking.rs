@@ -1,4 +1,4 @@
-use crate::chunk::Chunk;
+use crate::chunk::{Chunk, ChunkComponent};
 use crate::chunk_map::ChunkMap;
 use crate::interaction::raycasting::{BlockRaycastHit, raycast_block_data};
 use crate::textures::BlockTextures;
@@ -12,7 +12,8 @@ pub fn handle_block_breaking_input(
     mouse_input: Res<ButtonInput<MouseButton>>,
     camera_query: Query<&Transform, With<Camera>>,
     chunk_map: Res<ChunkMap>,
-    chunks_query: Query<&Chunk>,
+    chunks_query: Query<&ChunkComponent>,
+    chunks: Res<Assets<Chunk>>,
     mut break_event_writer: MessageWriter<BlockBreakMessage>,
 ) {
     let Ok(camera_transform) = camera_query.single() else {
@@ -27,25 +28,26 @@ pub fn handle_block_breaking_input(
     let ray_direction = camera_transform.forward();
 
     // Perform raycast using the efficient ChunkMap
-    if let Some(hit) = raycast_block_data(ray_origin, *ray_direction, &chunk_map, &chunks_query) {
+    if let Some(hit) = raycast_block_data(ray_origin, *ray_direction, &chunk_map, &chunks_query, &chunks) {
         break_event_writer.write(BlockBreakMessage(hit));
     }
 }
 
 pub fn apply_block_breaking(
     mut events: MessageReader<BlockBreakMessage>,
-    mut chunks_query: Query<(&mut Chunk, &mut Mesh3d)>,
+    mut chunks_query: Query<(&ChunkComponent, &mut Mesh3d)>,
+    mut chunks: ResMut<Assets<Chunk>>,
     textures: Res<BlockTextures>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     for event in events.read() {
         let hit = &event.0;
-        if let Ok((mut chunk, mut mesh_handle)) = chunks_query.get_mut(hit.chunk_entity) {
-            chunk.set_block(hit.chunk_local_pos, Block::AIR);
-
-            mesh_handle.0 = chunk.regenerate_mesh(&textures, &mut meshes);
-
-            // info!("Broke block {:?} at {:?}", hit.block, hit.block_pos);
+        if let Ok((chunk_component, mut mesh_handle)) = chunks_query.get_mut(hit.chunk_entity) {
+            if let Some(chunk) = chunks.get_mut(&chunk_component.0) {
+                chunk.set_block(hit.chunk_local_pos, Block::AIR);
+                mesh_handle.0 = chunk.regenerate_mesh(&textures, &mut meshes);
+                // info!("Broke block {:?} at {:?}", hit.block, hit.block_pos);
+            }
         }
     }
 }

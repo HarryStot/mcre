@@ -8,12 +8,13 @@ const BATCH_SIZE: usize = 10;
 #[derive(Resource)]
 pub enum BlockTextures {
     Loading {
+        // Should probably be `TextureId` not `Block`
         all: Vec<(Block, Option<Handle<Image>>)>,
         cur_index: usize,
         batch: Vec<(usize, Handle<Image>)>,
     },
     Loaded {
-        texture: Handle<Image>,
+        texture: Handle<StandardMaterial>,
         atlas: TextureAtlasLayout,
         blocks: HashMap<Block, usize>,
         individual_textures: HashMap<Block, Handle<Image>>,
@@ -32,7 +33,12 @@ impl Default for BlockTextures {
 
 impl BlockTextures {
     // Updates batch processing and returns true if finished
-    pub fn update_batch(&mut self, asset_server: &AssetServer, images: &mut Assets<Image>) -> bool {
+    pub fn update_batch(
+        &mut self,
+        asset_server: &AssetServer,
+        images: &mut Assets<Image>,
+        materials: &mut Assets<StandardMaterial>,
+    ) -> bool {
         let handles = match self {
             BlockTextures::Loading {
                 all,
@@ -101,6 +107,14 @@ impl BlockTextures {
         // Don't remove individual textures, we need them for the hotbar
         let texture = images.add(texture);
 
+        let texture = materials.add(StandardMaterial {
+            base_color_texture: Some(texture),
+            alpha_mode: AlphaMode::Mask(0.5),
+            reflectance: 0.0,
+            // unlit: true,
+            ..default()
+        });
+
         *self = BlockTextures::Loaded {
             atlas,
             blocks,
@@ -117,7 +131,7 @@ impl BlockTextures {
         }
     }
 
-    pub fn texture(&self) -> Option<&Handle<Image>> {
+    pub fn texture(&self) -> Option<&Handle<StandardMaterial>> {
         match self {
             BlockTextures::Loading { .. } => None,
             BlockTextures::Loaded { texture, .. } => Some(texture),
@@ -158,13 +172,14 @@ impl BlockTextures {
         mut commands: Commands,
         asset_server: Res<AssetServer>,
         mut images: ResMut<Assets<Image>>,
+        mut materials: ResMut<Assets<StandardMaterial>>,
     ) {
-        // TODO: Fix, currently two issues
+        // TODO: Fix, currently
         // Some blocks like `grindstone` have different states and thus its not just the name
         //    `grindstone` for the texture to use. Another example is GrassBlock has grass_block_side,
         //    grass_block_top, etc.
         let mut textures = BlockTextures::default();
-        textures.update_batch(&asset_server, &mut images);
+        textures.update_batch(&asset_server, &mut images, &mut materials);
         commands.insert_resource(textures);
     }
 
@@ -173,10 +188,10 @@ impl BlockTextures {
         mut textures: ResMut<BlockTextures>,
         asset_server: Res<AssetServer>,
         mut images: ResMut<Assets<Image>>,
+        mut materials: ResMut<Assets<StandardMaterial>>,
     ) {
-        //TODO: Make UI with loading screen
-
-        if textures.update_batch(&asset_server, &mut images) {
+        if textures.update_batch(&asset_server, &mut images, &mut materials) {
+            //TODO: Setup event here instead
             next_app_state.set(AppState::InGame);
         }
     }
