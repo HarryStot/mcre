@@ -41,13 +41,14 @@ pub fn handle_block_placing_input(
 
 pub fn apply_block_placing(
     mut events: MessageReader<BlockPlaceMessage>,
-    chunk_map: Res<ChunkMap>,
+    mut chunk_map: ResMut<ChunkMap>,
     mut chunks_query: Query<(&ChunkComponent, &mut Mesh3d)>,
     mut chunks: ResMut<Assets<Chunk>>,
     config: Res<ChunkLoaderConfig>,
     textures: Res<BlockTextures>,
     mut meshes: ResMut<Assets<Mesh>>,
     hotbar: Res<Hotbar>,
+    mut commands: Commands,
 ) {
     for event in events.read() {
         let hit: &BlockRaycastHit = &event.0;
@@ -64,23 +65,43 @@ pub fn apply_block_placing(
         let (chunk_world_pos, local_pos) =
             world_pos_to_chunk_pos(place_world_pos, &config.chunk_size);
 
-        let Some(&chunk_entity) = chunk_map.0.get(&chunk_world_pos) else {
+        let block_to_place = hotbar.get_selected_block();
+
+        let chunk_entity = if let Some(&existing_entity) = chunk_map.0.get(&chunk_world_pos) {
+            existing_entity
+        } else {
+            // Create a new empty chunk
+            let mut new_chunk = Chunk::empty(config.chunk_size, chunk_world_pos);
+            new_chunk.set_block(local_pos, block_to_place);
+
+            let chunk_handle = chunks.add(new_chunk.clone());
+            let mesh = meshes.add(new_chunk.generate_mesh(&textures));
+
+            let entity = commands
+                .spawn((
+                    ChunkComponent(chunk_handle.clone()),
+                    new_chunk.transform(),
+                    MeshMaterial3d(textures.texture().unwrap().clone()),
+                    Mesh3d(mesh),
+                ))
+                .id();
+
+            chunk_map.0.insert(chunk_world_pos, entity);
+
+            // Skip the rest since we already placed the block during chunk creation
             continue;
         };
 
+        // Update existing chunk
         if let Ok((chunk_component, mut mesh_handle)) = chunks_query.get_mut(chunk_entity) {
             if let Some(chunk) = chunks.get_mut(&chunk_component.0) {
-                if let Some(block_state) = chunk.get(local_pos) {
-                    if block_state.block() == Block::AIR {
-                        let block_to_place = hotbar.get_selected_block();
+                let can_place = chunk
+                    .get(local_pos)
+                    .map_or(true, |block_state| block_state.block() == Block::AIR);
 
-                        chunk.set_block(local_pos, block_to_place);
-                        mesh_handle.0 = chunk.regenerate_mesh(&textures, &mut meshes);
-                        // info!(
-                        //     "Placed block at world {:?} (chunk {:?}, local {:?})",
-                        //     place_world_pos, chunk_world_pos, local_pos
-                        // );
-                    }
+                if can_place {
+                    chunk.set_block(local_pos, block_to_place);
+                    mesh_handle.0 = chunk.regenerate_mesh(&textures, &mut meshes);
                 }
             }
         }
